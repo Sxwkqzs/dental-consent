@@ -262,6 +262,7 @@ textarea { resize: vertical; min-height: 80px; }
 }
 
 /* ===== Fullscreen Signature ===== */
+/* ===== Fullscreen Signature (Mobile Landscape Style) ===== */
 .fullscreen-sig-overlay {
   display: none;
   position: fixed;
@@ -273,51 +274,39 @@ textarea { resize: vertical; min-height: 80px; }
 .fullscreen-sig-overlay.active {
   display: flex;
 }
-.fullscreen-sig-header {
-  padding: 12px 16px;
-  background: var(--patient-primary);
-  color: #fff;
+.fullscreen-sig-main {
+  flex: 1;
+  position: relative;
   display: flex;
-  align-items: center;
-  justify-content: space-between;
-  flex-shrink: 0;
+  flex-direction: column;
+  padding: 16px;
 }
-.fullscreen-sig-header h3 {
-  font-size: 16px;
-  font-weight: 600;
-  margin: 0;
-}
-.fullscreen-sig-header .fs-close-btn {
-  background: rgba(255,255,255,0.2);
-  border: none;
-  color: #fff;
-  width: 32px; height: 32px;
-  border-radius: 50%;
-  font-size: 18px;
-  cursor: pointer;
+.fullscreen-sig-close {
+  position: absolute;
+  top: 12px;
+  left: 12px;
+  z-index: 10;
+  width: 36px;
+  height: 36px;
   display: flex;
   align-items: center;
   justify-content: center;
-  font-family: inherit;
+  cursor: pointer;
+  border-radius: 50%;
+  background: rgba(0,0,0,0.05);
+  font-size: 18px;
+  color: #333;
+}
+.fullscreen-sig-close:hover {
+  background: rgba(0,0,0,0.1);
 }
 .fullscreen-sig-canvas-wrap {
-  flex: none;
+  flex: 1;
   position: relative;
-  background: #fafbfc;
+  background: #fff;
   overflow: hidden;
-  width: 100%;
-  height: 55vh;
-  max-height: 420px;
-  min-height: 250px;
-  border-top: 1px solid var(--border);
-  border-bottom: 1px solid var(--border);
-}
-@media (max-width: 480px) {
-  .fullscreen-sig-canvas-wrap {
-    height: 60vh;
-    max-height: none;
-    min-height: 280px;
-  }
+  border: 2px dashed #d0d0d0;
+  border-radius: 8px;
 }
 .fullscreen-sig-canvas-wrap canvas {
   display: block;
@@ -329,36 +318,32 @@ textarea { resize: vertical; min-height: 80px; }
   position: absolute;
   top: 50%; left: 50%;
   transform: translate(-50%, -50%);
-  color: #ccc;
-  font-size: 18px;
+  color: #bbb;
+  font-size: 16px;
   pointer-events: none;
   text-align: center;
 }
-.fullscreen-sig-placeholder .sig-icon {
-  font-size: 48px;
-  margin-bottom: 8px;
-}
 .fullscreen-sig-footer {
-  padding: 12px 16px 24px;
+  padding: 16px 20px 28px;
   background: #fff;
-  border-top: 1px solid var(--border);
   display: flex;
-  gap: 12px;
+  gap: 16px;
+  justify-content: center;
   flex-shrink: 0;
 }
 .fullscreen-sig-footer button {
-  flex: 1;
-  padding: 14px;
+  padding: 12px 36px;
   border: none;
-  border-radius: 10px;
-  font-size: 16px;
-  font-weight: 600;
+  border-radius: 999px;
+  font-size: 15px;
+  font-weight: 500;
   cursor: pointer;
   font-family: inherit;
+  min-width: 120px;
 }
 .fs-btn-cancel {
-  background: #f5f5f5;
-  color: var(--text);
+  background: #e8e8e8;
+  color: #555;
 }
 .fs-btn-confirm {
   background: linear-gradient(135deg, var(--patient-primary), var(--patient-primary-dark));
@@ -366,7 +351,7 @@ textarea { resize: vertical; min-height: 80px; }
   box-shadow: 0 4px 12px rgba(46,125,50,0.3);
 }
 .fullscreen-sig-footer button:disabled {
-  background: #bbb !important;
+  opacity: 0.5;
   cursor: not-allowed;
 }
 
@@ -629,15 +614,15 @@ textarea { resize: vertical; min-height: 80px; }
 
     <!-- Fullscreen Signature Modal -->
     <div class="fullscreen-sig-overlay" id="fullscreen-sig-overlay">
-      <div class="fullscreen-sig-header">
-        <h3>&#9998; 手写签名</h3>
-        <button class="fs-close-btn" onclick="closeFullscreenSig()">&#10005;</button>
-      </div>
-      <div class="fullscreen-sig-canvas-wrap" id="fullscreen-sig-canvas-wrap">
-        <canvas id="fullscreen-sig-canvas"></canvas>
-        <div class="fullscreen-sig-placeholder" id="fullscreen-sig-placeholder">
-          <div class="sig-icon">&#9998;</div>
-          <div style="margin-top:8px;">请在此处手写签名</div>
+      <div class="fullscreen-sig-main">
+        <div class="fullscreen-sig-close" onclick="closeFullscreenSig()">
+          <span>&#10005;</span>
+        </div>
+        <div class="fullscreen-sig-canvas-wrap" id="fullscreen-sig-canvas-wrap">
+          <canvas id="fullscreen-sig-canvas"></canvas>
+          <div class="fullscreen-sig-placeholder" id="fullscreen-sig-placeholder">
+            <div>请在此处手写签名</div>
+          </div>
         </div>
       </div>
       <div class="fullscreen-sig-footer">
@@ -3878,23 +3863,19 @@ function openFullscreenSig() {
     if (!fullscreenSigPad) {
       fullscreenSigPad = new SignaturePad('fullscreen-sig-canvas', 'fullscreen-sig-placeholder');
     }
-    // Resize canvas to fill wrap with landscape orientation
+    // Resize canvas to fill the wrap completely (landscape for mobile)
     var wrap = document.getElementById('fullscreen-sig-canvas-wrap');
     var rect = wrap.getBoundingClientRect();
     var canvas = document.getElementById('fullscreen-sig-canvas');
     var dpr = window.devicePixelRatio || 1;
-    // Landscape canvas: width fills container, height = 45% of width for comfortable mobile signing
-    var w = rect.width;
-    var h = Math.min(Math.max(w * 0.45, 220), rect.height);
-    canvas.width = w * dpr;
-    canvas.height = h * dpr;
-    canvas.style.width = w + 'px';
-    canvas.style.height = h + 'px';
-    // Center the canvas vertically in the wrap
-    canvas.style.position = 'absolute';
-    canvas.style.top = '50%';
-    canvas.style.left = '0';
-    canvas.style.transform = 'translateY(-50%)';
+    canvas.width = rect.width * dpr;
+    canvas.height = rect.height * dpr;
+    canvas.style.width = rect.width + 'px';
+    canvas.style.height = rect.height + 'px';
+    canvas.style.position = '';
+    canvas.style.top = '';
+    canvas.style.left = '';
+    canvas.style.transform = '';
     if (fullscreenSigPad && fullscreenSigPad.ctx) {
       fullscreenSigPad.ctx.setTransform(1, 0, 0, 1, 0, 0);
       fullscreenSigPad.ctx.scale(dpr, dpr);
@@ -4138,8 +4119,8 @@ function initSync() {
     } catch(e) { alert('二维码数据解析失败'); }
   }
 
-  // Load from localStorage
-  var saved = localStorage.getItem(SYNC_KEY);
+  // Load from sessionStorage
+  var saved = sessionStorage.getItem(SYNC_KEY);
   if (saved && !codeParam && !encoded) {
     try {
       var data = JSON.parse(saved);
@@ -4411,14 +4392,14 @@ function broadcastData(source) {
   appData._ts = Date.now();
   // LocalStorage backup
   try {
-    localStorage.setItem(SYNC_KEY, JSON.stringify(appData));
+    sessionStorage.setItem(SYNC_KEY, JSON.stringify(appData));
   } catch(e) {
     try {
       var noImg = JSON.parse(JSON.stringify(appData));
       noImg.doctorSig = appData.doctorSig ? '__IMG__' : '';
       noImg.sealData = appData.sealData ? '__IMG__' : '';
       noImg.patientSig = appData.patientSig ? '__IMG__' : '';
-      localStorage.setItem(SYNC_KEY, JSON.stringify(noImg));
+      sessionStorage.setItem(SYNC_KEY, JSON.stringify(noImg));
     } catch(e2) {}
   }
   // BroadcastChannel (same-browser tabs)
@@ -4580,8 +4561,8 @@ function doctorSaveAndSync() {
   document.getElementById('p-sig-card').style.display = 'block';
 
   // Save persistent fields
-  localStorage.setItem('dental_clinic_name', appData.clinicName);
-  localStorage.setItem('dental_doctor_name', appData.doctorName);
+  sessionStorage.setItem('dental_clinic_name', appData.clinicName);
+  sessionStorage.setItem('dental_doctor_name', appData.doctorName);
 
   // Save to Supabase cloud
   currentAccessCode = generateAccessCode();
@@ -4843,9 +4824,9 @@ function init() {
   document.getElementById('p-signDate').value = todayStr;
 
   // Load saved clinic/doctor
-  var savedClinic = localStorage.getItem('dental_clinic_name');
+  var savedClinic = sessionStorage.getItem('dental_clinic_name');
   if (savedClinic) document.getElementById('d-clinicName').value = savedClinic;
-  var savedDoctor = localStorage.getItem('dental_doctor_name');
+  var savedDoctor = sessionStorage.getItem('dental_doctor_name');
   if (savedDoctor) document.getElementById('d-doctorName').value = savedDoctor;
 
   // Pre-load fixed values into appData
