@@ -614,6 +614,25 @@ textarea { resize: vertical; min-height: 80px; }
       </div>
     </div>
 
+    <!-- Fullscreen Signature Modal -->
+    <div class="fullscreen-sig-overlay" id="fullscreen-sig-overlay">
+      <div class="fullscreen-sig-header">
+        <h3>&#9998; 手写签名</h3>
+        <button class="fs-close-btn" onclick="closeFullscreenSig()">&#10005;</button>
+      </div>
+      <div class="fullscreen-sig-canvas-wrap" id="fullscreen-sig-canvas-wrap">
+        <canvas id="fullscreen-sig-canvas"></canvas>
+        <div class="fullscreen-sig-placeholder" id="fullscreen-sig-placeholder">
+          <div class="sig-icon">&#9998;</div>
+          <div style="margin-top:8px;">请在此处手写签名</div>
+        </div>
+      </div>
+      <div class="fullscreen-sig-footer">
+        <button class="fs-btn-cancel" onclick="clearFullscreenSig()">&#128260; 清除重签</button>
+        <button class="fs-btn-confirm" id="fs-btn-confirm" onclick="confirmFullscreenSig()">&#10004; 确认签署</button>
+      </div>
+    </div>
+
   </div>
 </div>
 
