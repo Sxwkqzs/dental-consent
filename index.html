@@ -241,6 +241,9 @@ textarea { resize: vertical; min-height: 80px; }
 .print-sig-block .sig-title { font-size: 13px; font-weight: 600; color: #333; margin-bottom: 8px; }
 .print-sig-block .sig-img-box { height: 80px; display: flex; align-items: center; justify-content: center; border-bottom: 1px solid #999; margin-bottom: 4px; }
 .print-sig-block .sig-img-box img { max-height: 76px; max-width: 200px; }
+/* Patient signature is drawn on a landscape canvas, rotate 90° counterclockwise for A4 display */
+.print-sig-block .sig-img-box.pw-sig-rot { height: 130px; }
+.print-sig-block .sig-img-box.pw-sig-rot img { max-height: 120px; max-width: 70px; transform: rotate(-90deg); }
 .print-sig-block .sig-date { font-size: 12px; color: #666; }
 .print-seal { position: relative; text-align: center; }
 .print-seal .seal-title { font-size: 13px; font-weight: 600; color: #333; margin-bottom: 8px; }
@@ -262,32 +265,30 @@ textarea { resize: vertical; min-height: 80px; }
 }
 
 /* ===== Fullscreen Signature ===== */
-/* ===== Fullscreen Signature (Mobile Landscape Style) ===== */
+/* ===== Fullscreen Signature (Landscape Sidebar Style) ===== */
 .fullscreen-sig-overlay {
   display: none;
   position: fixed;
   top: 0; left: 0; right: 0; bottom: 0;
   background: #fff;
   z-index: 10000;
-  flex-direction: column;
 }
 .fullscreen-sig-overlay.active {
   display: flex;
 }
-.fullscreen-sig-main {
-  flex: 1;
-  position: relative;
+.fullscreen-sig-sidebar {
+  width: 56px;
+  flex-shrink: 0;
   display: flex;
   flex-direction: column;
-  padding: 16px;
+  align-items: center;
+  padding: 12px 0;
+  border-right: 1px solid var(--border);
+  background: #fff;
 }
-.fullscreen-sig-close {
-  position: absolute;
-  top: 12px;
-  left: 12px;
-  z-index: 10;
-  width: 36px;
-  height: 36px;
+.fullscreen-sig-sidebar .fs-close-btn {
+  width: 40px;
+  height: 40px;
   display: flex;
   align-items: center;
   justify-content: center;
@@ -296,9 +297,33 @@ textarea { resize: vertical; min-height: 80px; }
   background: rgba(0,0,0,0.05);
   font-size: 18px;
   color: #333;
+  border: none;
+  font-family: inherit;
 }
-.fullscreen-sig-close:hover {
+.fullscreen-sig-sidebar .fs-close-btn:hover {
   background: rgba(0,0,0,0.1);
+}
+.fullscreen-sig-sidebar .fs-title {
+  writing-mode: vertical-rl;
+  text-orientation: mixed;
+  font-size: 14px;
+  font-weight: 500;
+  color: var(--text-light);
+  margin-top: 16px;
+  letter-spacing: 2px;
+}
+.fullscreen-sig-body {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+}
+.fullscreen-sig-canvas-area {
+  flex: 1;
+  position: relative;
+  padding: 16px 16px 0;
+  display: flex;
+  align-items: center;
 }
 .fullscreen-sig-canvas-wrap {
   flex: 1;
@@ -307,6 +332,7 @@ textarea { resize: vertical; min-height: 80px; }
   overflow: hidden;
   border: 2px dashed #d0d0d0;
   border-radius: 8px;
+  height: 100%;
 }
 .fullscreen-sig-canvas-wrap canvas {
   display: block;
@@ -324,7 +350,7 @@ textarea { resize: vertical; min-height: 80px; }
   text-align: center;
 }
 .fullscreen-sig-footer {
-  padding: 16px 20px 28px;
+  padding: 16px 20px 24px;
   background: #fff;
   display: flex;
   gap: 16px;
@@ -614,20 +640,23 @@ textarea { resize: vertical; min-height: 80px; }
 
     <!-- Fullscreen Signature Modal -->
     <div class="fullscreen-sig-overlay" id="fullscreen-sig-overlay">
-      <div class="fullscreen-sig-main">
-        <div class="fullscreen-sig-close" onclick="closeFullscreenSig()">
-          <span>&#10005;</span>
-        </div>
-        <div class="fullscreen-sig-canvas-wrap" id="fullscreen-sig-canvas-wrap">
-          <canvas id="fullscreen-sig-canvas"></canvas>
-          <div class="fullscreen-sig-placeholder" id="fullscreen-sig-placeholder">
-            <div>请在此处手写签名</div>
+      <div class="fullscreen-sig-sidebar">
+        <button class="fs-close-btn" onclick="closeFullscreenSig()">&#10005;</button>
+        <div class="fs-title">签字版</div>
+      </div>
+      <div class="fullscreen-sig-body">
+        <div class="fullscreen-sig-canvas-area">
+          <div class="fullscreen-sig-canvas-wrap" id="fullscreen-sig-canvas-wrap">
+            <canvas id="fullscreen-sig-canvas"></canvas>
+            <div class="fullscreen-sig-placeholder" id="fullscreen-sig-placeholder">
+              <div>请在此处手写签名</div>
+            </div>
           </div>
         </div>
-      </div>
-      <div class="fullscreen-sig-footer">
-        <button class="fs-btn-cancel" onclick="clearFullscreenSig()">&#128260; 清除重签</button>
-        <button class="fs-btn-confirm" id="fs-btn-confirm" onclick="confirmFullscreenSig()">&#10004; 确认签署</button>
+        <div class="fullscreen-sig-footer">
+          <button class="fs-btn-cancel" onclick="clearFullscreenSig()">&#128260; 清除重签</button>
+          <button class="fs-btn-confirm" id="fs-btn-confirm" onclick="confirmFullscreenSig()">&#10004; 确认签署</button>
+        </div>
       </div>
     </div>
 
@@ -672,7 +701,7 @@ textarea { resize: vertical; min-height: 80px; }
       <div class="print-signatures">
         <div class="print-sig-block">
           <div class="sig-title">本人或亲属、监护人签名</div>
-          <div class="sig-img-box"><img id="pw-patient-sig" src=""></div>
+          <div class="sig-img-box pw-sig-rot"><img id="pw-patient-sig" src=""></div>
           <div class="sig-date" id="pw-patient-date"></div>
         </div>
         <div class="print-sig-block">
