@@ -3946,12 +3946,18 @@ function confirmFullscreenSig() {
   pCtx.fillStyle = '#ffffff';
   pCtx.fillRect(0, 0, patientCanvas.width, patientCanvas.height);
   
-  // Draw fullscreen signature scaled to fit patient canvas
-  var scaleX = patientCanvas.width / fsCanvas.width;
-  var scaleY = patientCanvas.height / fsCanvas.height;
-  var scale = Math.min(scaleX, scaleY);
-  
+  // Draw fullscreen signature scaled to fit patient canvas (centered)
+  var cssCanvasW = patientCanvas.width / dpr;
+  var cssCanvasH = patientCanvas.height / dpr;
+  var cssFsW = fsCanvas.width / dpr;
+  var cssFsH = fsCanvas.height / dpr;
+  var scale = Math.min(cssCanvasW / cssFsW, cssCanvasH / cssFsH);
+
+  var offsetX = (cssCanvasW - cssFsW * scale) / 2;
+  var offsetY = (cssCanvasH - cssFsH * scale) / 2;
+
   pCtx.save();
+  pCtx.translate(offsetX, offsetY);
   pCtx.scale(scale, scale);
   pCtx.drawImage(fsCanvas, 0, 0);
   pCtx.restore();
