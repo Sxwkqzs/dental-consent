@@ -306,11 +306,18 @@ textarea { resize: vertical; min-height: 80px; }
   background: #fafbfc;
   overflow: hidden;
   width: 100%;
-  height: 40vh;
-  max-height: 320px;
-  min-height: 200px;
+  height: 55vh;
+  max-height: 420px;
+  min-height: 250px;
   border-top: 1px solid var(--border);
   border-bottom: 1px solid var(--border);
+}
+@media (max-width: 480px) {
+  .fullscreen-sig-canvas-wrap {
+    height: 60vh;
+    max-height: none;
+    min-height: 280px;
+  }
 }
 .fullscreen-sig-canvas-wrap canvas {
   display: block;
@@ -3876,9 +3883,9 @@ function openFullscreenSig() {
     var rect = wrap.getBoundingClientRect();
     var canvas = document.getElementById('fullscreen-sig-canvas');
     var dpr = window.devicePixelRatio || 1;
-    // Landscape: width fills container, height = 40% of width for comfortable signing
+    // Landscape canvas: width fills container, height = 45% of width for comfortable mobile signing
     var w = rect.width;
-    var h = Math.min(Math.max(w * 0.4, 200), rect.height);
+    var h = Math.min(Math.max(w * 0.45, 220), rect.height);
     canvas.width = w * dpr;
     canvas.height = h * dpr;
     canvas.style.width = w + 'px';
@@ -4787,6 +4794,43 @@ function hideLoading() {
 
 // ========== Init ==========
 function init() {
+  // Clear previous session data (patient info, diagnosis, signature)
+  // Keep clinic name and doctor name
+  document.getElementById('d-patientName').value = '';
+  document.getElementById('d-patientGender').value = '';
+  document.getElementById('d-patientAge').value = '';
+  document.getElementById('d-patientPhone').value = '';
+  document.getElementById('d-treatmentDate').value = '';
+  document.getElementById('d-clinicalDiagnosis').value = '';
+  document.getElementById('d-treatmentType').value = '';
+  document.getElementById('d-consent-content').innerHTML = '<p style="color:#999;text-align:center;padding:20px 0;">请先选择治疗项目</p>';
+  // Reset patient-side fields
+  document.getElementById('p-patientName').textContent = '待同步';
+  document.getElementById('p-patientName').classList.add('empty');
+  document.getElementById('p-patientGender').textContent = '待同步';
+  document.getElementById('p-patientGender').classList.add('empty');
+  document.getElementById('p-patientAge').textContent = '待同步';
+  document.getElementById('p-patientAge').classList.add('empty');
+  document.getElementById('p-patientPhone').textContent = '待同步';
+  document.getElementById('p-patientPhone').classList.add('empty');
+  document.getElementById('p-treatmentDate').textContent = '待同步';
+  document.getElementById('p-treatmentDate').classList.add('empty');
+  document.getElementById('p-clinicalDiagnosis').textContent = '待同步';
+  document.getElementById('p-clinicalDiagnosis').classList.add('empty');
+  document.getElementById('p-treatmentType').textContent = '待同步';
+  document.getElementById('p-treatmentType').classList.add('empty');
+  document.getElementById('p-consent-content').innerHTML = '<p style="color:#999;text-align:center;padding:20px 0;">等待医生端同步数据...</p>';
+  document.getElementById('p-agreeCheck').checked = false;
+  document.getElementById('p-sig-card').style.display = 'none';
+  document.getElementById('p-signDate').value = '';
+  // Clear signatures
+  if (patientSigPad) patientSigPad.clear();
+  if (fullscreenSigPad) fullscreenSigPad.clear();
+  appData.patientSig = '';
+  appData.patientSignDate = '';
+  appData.patientAgreed = false;
+  appData.status = 'editing';
+
   // Consent type change
   document.getElementById('d-treatmentType').addEventListener('change', updateConsentContent);
   updateConsentContent();
