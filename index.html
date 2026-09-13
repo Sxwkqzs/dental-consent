@@ -3862,8 +3862,8 @@ function initSync() {
     } catch(e) { alert('二维码数据解析失败'); }
   }
 
-  // Load from localStorage
-  var saved = localStorage.getItem(SYNC_KEY);
+  // Load from sessionStorage
+  var saved = sessionStorage.getItem(SYNC_KEY);
   if (saved && !codeParam && !encoded) {
     try {
       var data = JSON.parse(saved);
@@ -4135,14 +4135,14 @@ function broadcastData(source) {
   appData._ts = Date.now();
   // LocalStorage backup
   try {
-    localStorage.setItem(SYNC_KEY, JSON.stringify(appData));
+    sessionStorage.setItem(SYNC_KEY, JSON.stringify(appData));
   } catch(e) {
     try {
       var noImg = JSON.parse(JSON.stringify(appData));
       noImg.doctorSig = appData.doctorSig ? '__IMG__' : '';
       noImg.sealData = appData.sealData ? '__IMG__' : '';
       noImg.patientSig = appData.patientSig ? '__IMG__' : '';
-      localStorage.setItem(SYNC_KEY, JSON.stringify(noImg));
+      sessionStorage.setItem(SYNC_KEY, JSON.stringify(noImg));
     } catch(e2) {}
   }
   // BroadcastChannel (same-browser tabs)
@@ -4304,8 +4304,8 @@ function doctorSaveAndSync() {
   document.getElementById('p-sig-card').style.display = 'block';
 
   // Save persistent fields
-  localStorage.setItem('dental_clinic_name', appData.clinicName);
-  localStorage.setItem('dental_doctor_name', appData.doctorName);
+  sessionStorage.setItem('dental_clinic_name', appData.clinicName);
+  sessionStorage.setItem('dental_doctor_name', appData.doctorName);
 
   // Save to Supabase cloud
   currentAccessCode = generateAccessCode();
@@ -4518,9 +4518,62 @@ function hideLoading() {
 
 // ========== Init ==========
 function init() {
+  // Clear all dynamic patient/doctor data on every page load
+  // (ensures no stale data from previous session or refresh)
+  appData.patientName = '';
+  appData.patientGender = '';
+  appData.patientAge = '';
+  appData.patientPhone = '';
+  appData.treatmentDate = '';
+  appData.clinicalDiagnosis = '';
+  appData.consentContent = '';
+  appData.patientSig = '';
+  appData.patientSignDate = '';
+  appData.patientAgreed = false;
+  appData.status = 'editing';
+
+  // Clear doctor form fields
+  var dFields = ['d-patientName','d-patientGender','d-patientAge','d-patientPhone','d-treatmentDate','d-clinicalDiagnosis'];
+  dFields.forEach(function(id){
+    var el = document.getElementById(id);
+    if(el) el.value = '';
+  });
+
+  // Clear patient display fields
+  var pFields = ['p-patientName','p-patientGender','p-patientAge','p-patientPhone','p-treatmentDate','p-clinicalDiagnosis','p-treatmentType'];
+  pFields.forEach(function(id){
+    var el = document.getElementById(id);
+    if(el) { el.textContent = ''; if(el.tagName === 'INPUT') el.value = ''; }
+  });
+
+  // Reset consent content display
+  var pConsent = document.getElementById('p-consent-content');
+  if(pConsent) pConsent.innerHTML = '';
+
+  // Reset agreement checkbox and hide signature card
+  var agreeCheck = document.getElementById('p-agreeCheck');
+  if(agreeCheck) agreeCheck.checked = false;
+  var sigCard = document.getElementById('p-sig-card');
+  if(sigCard) sigCard.style.display = 'none';
+
+  // Clear signatures
+  if(patientSigPad) patientSigPad.clear();
+
+  // Reset doctor consent content to default (拔牙)
+  var dConsent = document.getElementById('d-consent-content');
+  if(dConsent) dConsent.innerHTML = consentData['拔牙'] || '';
+  appData.consentContent = consentData['拔牙'] || '';
+
+  // Reset treatment type selector
+  var tType = document.getElementById('d-treatmentType');
+  if(tType) {
+    tType.value = '';
+    // Trigger change to update consent content
+    updateConsentContent();
+  }
+
   // Consent type change
   document.getElementById('d-treatmentType').addEventListener('change', updateConsentContent);
-  updateConsentContent();
 
   // Today's date
   var today = new Date();
@@ -4529,22 +4582,19 @@ function init() {
   document.getElementById('d-treatmentDate').value = todayStr;
   document.getElementById('p-signDate').value = todayStr;
 
-  // Load saved clinic/doctor
-  var savedClinic = localStorage.getItem('dental_clinic_name');
-  if (savedClinic) document.getElementById('d-clinicName').value = savedClinic;
-  var savedDoctor = localStorage.getItem('dental_doctor_name');
-  if (savedDoctor) document.getElementById('d-doctorName').value = savedDoctor;
+  // Load saved clinic/doctor (fixed values from sessionStorage if same session)
+  var savedClinic = sessionStorage.getItem('dental_clinic_name');
+  if(savedClinic) document.getElementById('d-clinicName').value = savedClinic;
+  var savedDoctor = sessionStorage.getItem('dental_doctor_name');
+  if(savedDoctor) document.getElementById('d-doctorName').value = savedDoctor;
 
   // Pre-load fixed values into appData
   appData.clinicName = '苏小卫口腔诊所';
   appData.doctorName = '苏小卫';
-  appData.treatmentType = '拔牙';
+  appData.treatmentType = '';
   appData.doctorSig = document.getElementById('doctor-sig-img').src;
   appData.sealMode = 'upload';
   appData.sealData = document.getElementById('seal-img').src;
-  // Pre-load consent content for 拔牙
-  document.getElementById('d-consent-content').innerHTML = consentData['拔牙'];
-  appData.consentContent = consentData['拔牙'];
 
   // Init sync
   initSync();
