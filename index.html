@@ -403,7 +403,7 @@ textarea { resize: vertical; min-height: 80px; }
         <p class="btn-hint">保存后可生成二维码供患者扫码签署</p>
         <div style="height:8px;"></div>
         <button class="btn-secondary" onclick="showAccessCodeModal()">生成患者访问码</button>
-        <p class="btn-hint">点击后生成6位访问码，患者输入即可通过云端同步接收全部数据</p>
+        <p class="btn-hint">点击后生成6位访问码，患者输入即可通过本地同步接收全部数据</p>
         
       </div>
     </div>
@@ -428,7 +428,7 @@ textarea { resize: vertical; min-height: 80px; }
         <div class="form-group">
           <input type="text" id="p-peerCode" placeholder="请输入访问码" maxlength="6" style="text-align:center;font-size:18px;letter-spacing:4px;font-weight:600;">
         </div>
-        <button class="btn-primary" onclick="loadFromSupabase(document.getElementById('p-peerCode').value.trim())">加载数据</button>
+        <button class="btn-primary" onclick="loadFromLocal(document.getElementById('p-peerCode').value.trim())">加载数据</button>
       </div>
     </div>
 
@@ -3619,36 +3619,7 @@ var appData = {
 };
 
 var patientSigPad = null;
-// ========== Supabase Configuration ==========
-// 配置说明：
-// 1. 前往 https://supabase.com 注册/登录
-// 2. 创建新项目（New Project），Region 选 Singapore（离中国最近）
-// 3. 在 Project Settings > API 中获取 URL 和 anon key
-// 4. 在 Database > Tables 中创建 consent_forms 表：
-//    - id: uuid, default: gen_random_uuid(), Primary Key
-//    - access_code: text, Unique
-//    - clinic_name: text
-//    - doctor_name: text
-//    - patient_name: text
-//    - patient_gender: text
-//    - patient_age: text
-//    - patient_phone: text
-//    - treatment_date: text
-//    - clinical_diagnosis: text
-//    - treatment_type: text
-//    - consent_content: text
-//    - doctor_sig: text
-//    - seal_data: text
-//    - patient_sig: text
-//    - patient_sign_date: text
-//    - patient_agreed: boolean, default: false
-//    - status: text, default: 'editing'
-//    - created_at: timestamp with time zone, default: now()
-// 5. 在 Database > Policies 中添加 RLS 策略（允许匿名读写）：
-//    CREATE POLICY "Allow all" ON consent_forms FOR ALL USING (true) WITH CHECK (true);
-//    ALTER TABLE consent_forms ENABLE ROW LEVEL SECURITY;
-var SUPABASE_URL = 'https://xtnjicleuvwmacjxbitm.supabase.co';
-var SUPABASE_ANON_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6Inh0bmppY2xldXZ3bWFjanhiaXRtIiwicm9sZSI6ImFub24iLCJpYXQiOjE3ODg2NzY2MjksImV4cCI6MjEwNDI1MjYyOX0.7e8UUU_hWuZ7sc6n3s6RxC8NELSS-IkTouqqLCcRG4o';
+// ========== Local Storage Sync (No Cloud) ==========
 
 // Local backup key for offline fallback
 var SYNC_KEY = 'dental_consent_sync';
@@ -3911,17 +3882,21 @@ function initSync() {
   // Check URL params
   var params = new URLSearchParams(window.location.search);
 
-  // ?code=XXXX -> patient auto-loads from Supabase
+  // ?code=XXXX -> patient auto-loads from localStorage by code
   var codeParam = params.get('code');
   if (codeParam) {
     switchTab('patient');
-    if (isWeChatBrowser()) {
-      document.getElementById('p-peerCode').value = codeParam;
-      setSyncStatus('patient', false, '微信浏览器可能受限，建议用Chrome/Safari打开');
-    } else {
-      setSyncStatus('patient', false, '正在从云端加载...');
-      document.getElementById('p-peerCode').value = codeParam;
-      setTimeout(function() { loadFromSupabase(codeParam); }, 500);
+    var saved = localStorage.getItem(SYNC_KEY);
+    if (saved) {
+      try {
+        var data = JSON.parse(saved);
+        applyDoctorData(data);
+        if (data.status === 'patient_signed') {
+          applyPatientData(data);
+        }
+        setSyncStatus('patient', true, '已从本地加载数据');
+        document.getElementById('p-sig-card').style.display = 'block';
+      } catch(e) {}
     }
     return;
   }
@@ -3950,10 +3925,7 @@ function initSync() {
   }
 }
 
-// ========== PeerJS P2P Sync ==========
-// ========== Supabase Cloud Sync ==========
 var currentAccessCode = null;
-var supabasePollingInterval = null;
 
 function generateAccessCode() {
   var chars = 'ABCDEFGHJKLMNPQRSTUVWXYZ23456789';
@@ -3980,186 +3952,9 @@ function getPageBaseUrl() {
   return origin + loc.pathname;
 }
 
-function isSupabaseConfigured() {
-  return SUPABASE_URL.indexOf('YOUR_PROJECT') === -1 && SUPABASE_ANON_KEY.indexOf('YOUR_') === -1;
-}
-
-function supabaseHeaders() {
-  return {
-    'apikey': SUPABASE_ANON_KEY,
-    'Authorization': 'Bearer ' + SUPABASE_ANON_KEY,
-    'Content-Type': 'application/json',
-    'Prefer': 'return=representation'
-  };
-}
-
-function supabaseUrl(table, query) {
-  var url = SUPABASE_URL + '/rest/v1/' + table;
-  if (query) url += '?' + query;
-  return url;
-}
-
-function saveToSupabase(data, onSuccess, onError) {
-  if (!isSupabaseConfigured()) {
-    if (onError) onError('Supabase 未配置');
-    return;
-  }
-  showLoading('正在保存到云端...');
-  fetch(supabaseUrl('consent_forms', ''), {
-    method: 'POST',
-    headers: supabaseHeaders(),
-    body: JSON.stringify(data)
-  })
-  .then(function(r) {
-    if (!r.ok) throw new Error('HTTP ' + r.status);
-    return r.json();
-  })
-  .then(function(result) {
-    hideLoading();
-    if (onSuccess) onSuccess(result);
-  })
-  .catch(function(err) {
-    hideLoading();
-    console.error('Supabase save error:', err);
-    if (onError) onError(err.message);
-  });
-}
-
-function getFromSupabase(accessCode, onSuccess, onError) {
-  if (!isSupabaseConfigured()) {
-    if (onError) onError('Supabase 未配置');
-    return;
-  }
-  showLoading('正在从云端获取数据...');
-  var query = 'access_code=eq.' + encodeURIComponent(accessCode) + '&limit=1';
-  fetch(supabaseUrl('consent_forms', query), {
-    method: 'GET',
-    headers: supabaseHeaders()
-  })
-  .then(function(r) {
-    if (!r.ok) throw new Error('HTTP ' + r.status);
-    return r.json();
-  })
-  .then(function(result) {
-    hideLoading();
-    if (result && result.length > 0) {
-      if (onSuccess) onSuccess(result[0]);
-    } else {
-      if (onError) onError('未找到该访问码');
-    }
-  })
-  .catch(function(err) {
-    hideLoading();
-    console.error('Supabase get error:', err);
-    var msg = err.message || '未知错误';
-    if (err.name === 'TypeError' && msg.indexOf('fetch') !== -1) {
-      msg = '网络连接失败。请检查：\n1. 手机网络是否正常\n2. 微信内置浏览器可能拦截跨域请求，建议用Chrome/Safari打开\n3. Supabase项目是否已创建并启动';
-    }
-    if (onError) onError(msg);
-  });
-}
-
-function updateSupabase(accessCode, data, onSuccess, onError) {
-  if (!isSupabaseConfigured()) {
-    if (onError) onError('Supabase 未配置');
-    return;
-  }
-  showLoading('正在更新云端数据...');
-  var query = 'access_code=eq.' + encodeURIComponent(accessCode);
-  fetch(supabaseUrl('consent_forms', query), {
-    method: 'PATCH',
-    headers: supabaseHeaders(),
-    body: JSON.stringify(data)
-  })
-  .then(function(r) {
-    if (!r.ok) throw new Error('HTTP ' + r.status);
-    return r.json();
-  })
-  .then(function(result) {
-    hideLoading();
-    if (onSuccess) onSuccess(result);
-  })
-  .catch(function(err) {
-    hideLoading();
-    console.error('Supabase update error:', err);
-    if (onError) onError(err.message);
-  });
-}
-
-function loadFromSupabase(accessCode) {
-  if (isWeChatBrowser()) {
-    var confirmed = confirm('检测到微信内置浏览器。\n\n微信可能拦截云端数据加载，建议点击"取消"后，用手机浏览器（Chrome/Safari）重新打开本页面。\n\n如果仍要在微信中尝试，请点击"确定"。');
-    if (!confirmed) return;
-  }
-  getFromSupabase(accessCode, function(row) {
-    applyDoctorData({
-      clinicName: row.clinic_name,
-      doctorName: row.doctor_name,
-      patientName: row.patient_name,
-      patientGender: row.patient_gender,
-      patientAge: row.patient_age,
-      patientPhone: row.patient_phone,
-      treatmentDate: row.treatment_date,
-      clinicalDiagnosis: row.clinical_diagnosis,
-      treatmentType: row.treatment_type,
-      consentContent: row.consent_content,
-      doctorSig: row.doctor_sig,
-      sealData: row.seal_data,
-      status: row.status
-    });
-    if (row.patient_sig) {
-      applyPatientData({
-        patientSig: row.patient_sig,
-        patientSignDate: row.patient_sign_date,
-        patientAgreed: row.patient_agreed,
-        status: row.status
-      });
-    }
-    currentAccessCode = accessCode;
-    setSyncStatus('patient', true, '已从云端加载数据');
-    document.getElementById('p-sig-card').style.display = 'block';
-  }, function(err) {
-    setSyncStatus('patient', false, '加载失败');
-    alert('从云端加载失败: ' + err);
-  });
-}
-
-function startPollingForPatientSign() {
-  if (supabasePollingInterval) clearInterval(supabasePollingInterval);
-  if (!currentAccessCode || !isSupabaseConfigured()) return;
-  supabasePollingInterval = setInterval(function() {
-    var query = 'access_code=eq.' + encodeURIComponent(currentAccessCode) + '&select=patient_sig,patient_sign_date,patient_agreed,status&limit=1';
-    fetch(supabaseUrl('consent_forms', query), {
-      method: 'GET',
-      headers: supabaseHeaders()
-    })
-    .then(function(r) { return r.json(); })
-    .then(function(result) {
-      if (result && result.length > 0) {
-        var row = result[0];
-        if (row.patient_sig) {
-          appData.patientSig = row.patient_sig;
-          appData.patientSignDate = row.patient_sign_date || '';
-          appData.patientAgreed = row.patient_agreed || false;
-          appData.status = row.status || 'patient_signed';
-          setSyncStatus('doctor', true, '患者已签署 ✓');
-          clearInterval(supabasePollingInterval);
-          supabasePollingInterval = null;
-          alert('患者已签署！可切换到预览/打印生成最终文档。');
-        }
-      }
-    })
-    .catch(function(err) { console.error('Polling error:', err); });
-  }, 5000);
-}
-
 function showAccessCodeModal() {
-  if (!isSupabaseConfigured()) {
-    alert('请先配置 Supabase！\n\n1. 前往 supabase.com 注册并创建项目\n2. 在 Project Settings > API 中获取 URL 和 anon key\n3. 替换本文件顶部的 SUPABASE_URL 和 SUPABASE_ANON_KEY\n4. 在 Database > Tables 创建 consent_forms 表（详见文件内注释）');
-    return;
-  }
   if (!currentAccessCode) {
-    alert('请先保存数据到云端');
+    alert('请先保存数据');
     return;
   }
 
@@ -4203,7 +3998,30 @@ function showAccessCodeModal() {
   document.getElementById('qr-modal').classList.add('active');
 }
 
-function showQRModal() { showAccessCodeModal(); }
+function loadFromLocal(accessCode) {
+  if (!accessCode) {
+    alert('请输入访问码');
+    return;
+  }
+  var saved = localStorage.getItem(SYNC_KEY);
+  if (saved) {
+    try {
+      var data = JSON.parse(saved);
+      applyDoctorData(data);
+      if (data.status === 'patient_signed') {
+        applyPatientData(data);
+      }
+      currentAccessCode = accessCode;
+      setSyncStatus('patient', true, '已从本地加载数据');
+      document.getElementById('p-sig-card').style.display = 'block';
+      alert('数据已加载！\\n\\n提示：本地存储仅在同一浏览器内有效。如需跨设备同步，请让医生重新生成二维码扫描。');
+    } catch(e) {
+      alert('本地数据解析失败');
+    }
+  } else {
+    alert('未找到本地数据。\\n\\n可能原因：\\n1. 数据已被清除\\n2. 使用了不同的浏览器或设备\\n\\n请让医生重新生成二维码扫描，或在同一浏览器的新标签页打开本页面。');
+  }
+}
 
 function broadcastData(source) {
   appData._source = source;
@@ -4382,34 +4200,11 @@ function doctorSaveAndSync() {
   localStorage.setItem('dental_clinic_name', appData.clinicName);
   localStorage.setItem('dental_doctor_name', appData.doctorName);
 
-  // Save to Supabase cloud
+  // Save to localStorage (no cloud)
   currentAccessCode = generateAccessCode();
-  var saveData = {
-    access_code: currentAccessCode,
-    clinic_name: appData.clinicName,
-    doctor_name: appData.doctorName,
-    patient_name: appData.patientName,
-    patient_gender: appData.patientGender,
-    patient_age: appData.patientAge,
-    patient_phone: appData.patientPhone,
-    treatment_date: appData.treatmentDate,
-    clinical_diagnosis: appData.clinicalDiagnosis,
-    treatment_type: appData.treatmentType,
-    consent_content: appData.consentContent,
-    doctor_sig: appData.doctorSig,
-    seal_data: appData.sealData || '',
-    status: appData.status
-  };
-
-  saveToSupabase(saveData, function(result) {
-    setSyncStatus('doctor', true, '已保存到云端 ✓');
-    alert('保存成功！\n\n访问码: ' + currentAccessCode + '\n\n患者可通过以下方式查看：\n1. 扫描生成的二维码\n2. 在手机浏览器输入访问码\n3. 直接发送链接给患者');
-    // Start polling for patient signature
-    startPollingForPatientSign();
-  }, function(err) {
-    setSyncStatus('doctor', false, '云端保存失败: ' + err);
-    alert('本地保存成功，但云端保存失败: ' + err + '\n\n请检查 Supabase 配置是否正确。');
-  });
+  broadcastData('doctor');
+  setSyncStatus('doctor', true, '已保存到本地');
+  alert('保存成功！\n\n请使用以下方式让患者查看：\n1. 扫描生成的二维码\n2. 在同一电脑的另一个浏览器标签页打开本页面\n3. 患者端可直接访问');
 }
 
 // ========== QR Code ==========
@@ -4484,21 +4279,9 @@ function patientConfirmSign() {
   appData.status = 'patient_signed';
   broadcastData('patient');
 
-  // Save signature to Supabase cloud
-  if (currentAccessCode && isSupabaseConfigured()) {
-    updateSupabase(currentAccessCode, {
-      patient_sig: appData.patientSig,
-      patient_sign_date: appData.patientSignDate,
-      patient_agreed: true,
-      status: 'patient_signed'
-    }, function(result) {
-      alert('签署成功！\n\n签名已保存到云端，医生端刷新即可查看。');
-    }, function(err) {
-      alert('签署成功！\n\n本地已保存，但云端同步失败: ' + err);
-    });
-  } else {
-    alert('签署成功！\n\n签名已保存。');
-  }
+  // Save to localStorage (no cloud)
+  broadcastData('patient');
+  alert('签署成功！\n\n签名已保存，可切换到预览/打印生成最终文档。');
 }
 
 // ========== Preview / Print ==========
